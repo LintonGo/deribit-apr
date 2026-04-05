@@ -1,0 +1,151 @@
+/* Deribit APR Calculator - Styles */
+
+/* APR Header Cell */
+.deribit-apr-header {
+  background: linear-gradient(135deg, #252540 0%, #1a1a2e 100%) !important;
+  padding: 8px 12px !important;
+  text-align: center !important;
+  font-weight: 600 !important;
+  color: #f7931a !important;
+  border-left: 2px solid #f7931a !important;
+  position: sticky !important;
+  top: 0;
+  z-index: 10;
+}
+
+.deribit-apr-header-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.deribit-apr-header-content .deribit-apr-strategy {
+  font-size: 10px;
+  color: #888;
+  font-weight: 400;
+}
+
+/* APR Data Cell */
+.deribit-apr-cell {
+  background: rgba(247, 147, 26, 0.05) !important;
+  padding: 8px 12px !important;
+  text-align: center !important;
+  border-left: 2px solid #f7931a !important;
+  min-width: 80px;
+}
+
+.deribit-apr-value {
+  font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+  font-size: 13px;
+  font-weight: 600;
+  color: #f7931a;
+  cursor: help;
+}
+
+.deribit-apr-value:hover {
+  text-decoration: underline;
+}
+
+/* APR Value Color Coding */
+.deribit-apr-cell[data-apr]::after {
+  content: '';
+  position: absolute;
+  bottom: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 30px;
+  height: 2px;
+  border-radius: 1px;
+  opacity: 0.5;
+}
+
+/* High APR (over 50%) */
+.deribit-apr-cell[data-apr] .deribit-apr-value {
+  color: #4ade80;
+}
+
+/* Medium APR (20-50%) */
+.deribit-apr-cell[data-apr="20"] .deribit-apr-value,
+.deribit-apr-cell[data-apr="30"] .deribit-apr-value,
+.deribit-apr-cell[data-apr="40"] .deribit-apr-value,
+.deribit-apr-cell[data-apr="50"] .deribit-apr-value {
+  color: #f7931a;
+}
+
+/* N/A Value */
+.deribit-apr-value.deribit-apr-na {
+  color: #666;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+/* Tooltip Styling */
+.deribit-apr-cell:hover::before {
+  content: attr(data-days) ' days to expiry';
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1a1a2e;
+  color: #fff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  white-space: nowrap;
+  z-index: 100;
+  pointer-events: none;
+}
+
+/* Responsive adjustments */
+@media screen and (max-width: 1200px) {
+  .deribit-apr-header,
+  .deribit-apr-cell {
+    padding: 6px 8px !important;
+    min-width: 60px;
+  }
+
+  .deribit-apr-value {
+    font-size: 12px;
+  }
+}
+
+/* Dark theme compatibility */
+.deribit-apr-header,
+.deribit-apr-cell {
+  background-color: rgba(26, 26, 46, 0.95) !important;
+}
+
+/* Animation for new APR values */
+@keyframes deribit-apr-highlight {
+  0% {
+    background-color: rgba(247, 147, 26, 0.3);
+  }
+  100% {
+    background-color: rgba(247, 147, 26, 0.05);
+  }
+}
+
+.deribit-apr-cell.new {
+  animation: deribit-apr-highlight 1s ease-out;
+}
+
+/* Sort indicator for APR column */
+.deribit-apr-header.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.deribit-apr-header.sortable:hover {
+  background: rgba(247, 147, 26, 0.1) !important;
+}
+
+.deribit-apr-header.sort-asc::after {
+  content: ' ▲';
+  font-size: 10px;
+}
+
+.deribit-apr-header.sort-desc::after {
+  content: ' ▼';
+  font-size: 10px;
+}

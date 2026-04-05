@@ -1,0 +1,45 @@
+{
+  "manifest_version": 3,
+  "name": "Options APR Calculator",
+  "version": "1.1.0",
+  "description": "Calculate and display Annual Percentage Rate (APR) for options",
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://www.deribit.com/*",
+    "https://deribit.com/*",
+    "https://www.tibired.com/*",
+    "https://tibired.com/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.deribit.com/*",
+        "https://deribit.com/*",
+        "https://www.tibired.com/*",
+        "https://tibired.com/*"
+      ],
+      "js": ["content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  }
+}
