@@ -350,9 +350,32 @@
     return defaultExpiry;
   }
 
+  // ========== Check if Option is OTM (Out of The Money) ==========
+  function isOTM(strike, optionType, underlyingPrice) {
+    if (!underlyingPrice) return false; // Can't determine if no underlying price
+
+    if (optionType === 'call') {
+      // Call is OTM when strike > underlying price
+      return strike > underlyingPrice;
+    } else if (optionType === 'put') {
+      // Put is OTM when strike < underlying price
+      return strike < underlyingPrice;
+    }
+    return false;
+  }
+
   // ========== Update Tibired APR Badge ==========
   function updateTibiredAPRBadge(parentEl, aprData, priceType, strike, optionType, assetType) {
     if (!parentEl || !aprData) return;
+
+    // Only show APR for OTM (Out of The Money) options - seller perspective
+    // Call OTM: strike > underlyingPrice (left bottom quadrant)
+    // Put OTM: strike < underlyingPrice (right upper quadrant)
+    if (!isOTM(strike, optionType, underlyingPrice)) {
+      // Remove badge if exists (for ITM options)
+      removeTibiredAPRBadge(parentEl, priceType);
+      return;
+    }
 
     // Find existing badge or create new one
     let aprBadge = parentEl.querySelector(`.apr-badge-${priceType}`);
@@ -393,7 +416,7 @@
 
     // Update content
     aprBadge.textContent = `APR: ${aprData.apr.toFixed(1)}%`;
-    aprBadge.title = `${assetType || 'BTC'} ${optionType.toUpperCase()} ${strike} | ${priceType.toUpperCase()} | Days: ${aprData.daysToExpiry.toFixed(1)} | Price: $${aprData.optionPriceUSD.toFixed(2)}`;
+    aprBadge.title = `${assetType || 'BTC'} ${optionType.toUpperCase()} ${strike} (OTM) | ${priceType.toUpperCase()} | Days: ${aprData.daysToExpiry.toFixed(1)} | Price: $${aprData.optionPriceUSD.toFixed(2)}`;
   }
 
   // ========== Remove Tibired APR Badge ==========
