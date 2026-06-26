@@ -2,8 +2,6 @@
 
 document.addEventListener('DOMContentLoaded', () => {
   const aprToggle = document.getElementById('aprToggle');
-  const btcPriceEl = document.getElementById('btcPrice');
-  const ethPriceEl = document.getElementById('ethPrice');
   const statusDot = document.getElementById('statusDot');
   const statusText = document.getElementById('statusText');
 
@@ -70,18 +68,6 @@ document.addEventListener('DOMContentLoaded', () => {
           aprToggle.checked = isEnabled;
           updateUI();
 
-          if (response.btcPrice) {
-            btcPriceEl.textContent = `$${response.btcPrice.toLocaleString()}`;
-          } else {
-            btcPriceEl.textContent = 'N/A';
-          }
-
-          if (response.ethPrice) {
-            ethPriceEl.textContent = `$${response.ethPrice.toLocaleString()}`;
-          } else {
-            ethPriceEl.textContent = 'N/A';
-          }
-
           if (isEnabled) {
             statusText.textContent = `Active on ${siteName}`;
           } else {
@@ -92,8 +78,6 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       statusDot.classList.add('inactive');
       statusText.textContent = 'Not on supported site';
-      btcPriceEl.textContent = 'N/A';
-      ethPriceEl.textContent = 'N/A';
     }
   });
 

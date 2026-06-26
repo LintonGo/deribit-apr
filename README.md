@@ -7,11 +7,11 @@ Chrome 扩展，在 Tibired 期权交易页面实时计算并显示 APR（年化
 ## 功能特性
 
 - 在期权链的买价、卖价旁实时显示 APR
-- 同时支持 **BTC** 和 **ETH** 期权
-- **仅显示虚值期权 APR**：
-  - 虚值 Call (OTM)：行权价 > 标价现价 → 显示 APR
-  - 虚值 Put (OTM)：行权价 < 标价现价 → 显示 APR
-  - 实值期权不显示 APR（卖方风险更高）
+- **支持任意 USDC 计价期权**：BTC、ETH、HYPE、SOL 等所有在 Tibired 上线的资产均可自动识别
+- **仅显示虚值期权 APR**（卖方有意义的方向）：
+  - 高卖 Call (OTM Call)：行权价 > 标的现价 → 显示 APR
+  - 低卖 Put (OTM Put)：行权价 < 标的现价 → 显示 APR
+  - 实值期权（另两个象限）不显示
 - 实时更新：价格变化时自动重新计算 APR
 - 一键开关：可随时开启/关闭 APR 显示
 - 颜色区分：
@@ -72,7 +72,7 @@ deribit-apr/
 
 ### 页面适配
 扩展通过以下方式识别期权数据：
-- 期权行：`data-id="BTC_USDC-24APR26-66000-C"` 格式
+- 期权行：`data-id="BTC_USDC-24APR26-66000-C"`、`HYPE_USDC-25SEP26-45-P` 等任意 `{ASSET}_USDC-...` 格式
 - 买价列：`data-colid="best_bid_price"`
 - 卖价列：`data-colid="best_ask_price"`
 
@@ -80,7 +80,13 @@ deribit-apr/
 使用 MutationObserver 监听价格变化，配合防抖机制（200ms）避免频繁计算。
 
 ### 价格获取
-从页面上的 "标的期货" 标签获取当前 BTC/ETH 价格。
+从页面上多级回退获取当前标的现价，确保不同资产/页面结构都能命中：
+1. "标的期货" 标签元素（已知 Tibired class）
+2. 广度搜索含 "标的期货" 文本的元素
+3. 英文 `Underlying` / `Index` / `Spot` 标签
+4. 期权链中间行的实时价格单元格（如 `.css-ko4qlk`）
+
+检测到资产切换时（SPA 内从 BTC 跳到 HYPE 等）会立即清空缓存的现价，避免跨资产残留导致 OTM 判断反向。
 
 ## 注意事项
 

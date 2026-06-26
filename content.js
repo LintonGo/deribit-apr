@@ -162,8 +162,8 @@
   function processTibired() {
     log('[APR] Processing Tibired page...');
 
-    // Find all option rows using data-id attribute
-    const optionRows = document.querySelectorAll('[data-id^="BTC_USDC-"], [data-id^="ETH_USDC-"]');
+    // Find all option rows using data-id attribute (supports any asset, e.g. BTC/ETH/SOL/...)
+    const optionRows = document.querySelectorAll('[data-id*="_USDC-"]');
 
     log('[APR] Found option rows:', optionRows.length);
 
@@ -197,7 +197,7 @@
     });
 
     // Observe the option chain container instead of individual elements
-    const container = document.querySelector('[data-id^="BTC_USDC-"], [data-id^="ETH_USDC-"]')?.parentElement;
+    const container = document.querySelector('[data-id*="_USDC-"]')?.parentElement;
     if (container) {
       priceObserver.observe(container, {
         childList: true,
@@ -219,7 +219,7 @@
       // Check if this is a price element
       const priceContainer = target.closest('[data-colid="best_bid_price"], [data-colid="best_ask_price"]');
       if (priceContainer) {
-        const optionRow = priceContainer.closest('[data-id^="BTC_USDC-"], [data-id^="ETH_USDC-"]');
+        const optionRow = priceContainer.closest('[data-id*="_USDC-"]');
         if (optionRow && !processedRows.has(optionRow)) {
           processedRows.add(optionRow);
           const expiry = getTibiredExpiryFromPage();
@@ -241,13 +241,13 @@
     const dataId = row.getAttribute('data-id');
     if (!dataId) return;
 
-    // Parse option info from data-id: BTC_USDC-24APR26-40000-C or ETH_USDC-6APR26-2000-C
-    const match = dataId.match(/(BTC|ETH)_USDC-(\d{1,2}[A-Z]{3}\d{2})-(\d+)-([CP])$/);
+    // Parse option info from data-id: BTC_USDC-24APR26-40000-C, ETH_USDC-6APR26-2000-C, SOL_USDC-...
+    const match = dataId.match(/([A-Z]+)_USDC-(\d{1,2}[A-Z]{3}\d{2})-(\d+)-([CP])$/);
     if (!match) {
       return;
     }
 
-    const assetType = match[1]; // BTC or ETH
+    const assetType = match[1]; // BTC, ETH, SOL, ...
     const strike = parseFloat(match[3]);
     const optionType = match[4] === 'P' ? 'put' : 'call';
 
@@ -368,11 +368,11 @@
   function updateTibiredAPRBadge(parentEl, aprData, priceType, strike, optionType, assetType) {
     if (!parentEl || !aprData) return;
 
-    // Only show APR for OTM (Out of The Money) options - seller perspective
-    // Call OTM: strike > underlyingPrice (left bottom quadrant)
-    // Put OTM: strike < underlyingPrice (right upper quadrant)
+    // Only show APR for OTM options - the meaningful quadrants for sellers:
+    //   OTM Call (高卖 Call): strike > spot
+    //   OTM Put  (低卖 Put):  strike < spot
+    // ITM options (the other two quadrants) are not meaningful for APR display
     if (!isOTM(strike, optionType, underlyingPrice)) {
-      // Remove badge if exists (for ITM options)
       removeTibiredAPRBadge(parentEl, priceType);
       return;
     }
@@ -414,9 +414,9 @@
       parentEl.appendChild(aprBadge);
     }
 
-    // Update content
+    // Update content - only show APR
     aprBadge.textContent = `APR: ${aprData.apr.toFixed(1)}%`;
-    aprBadge.title = `${assetType || 'BTC'} ${optionType.toUpperCase()} ${strike} (OTM) | ${priceType.toUpperCase()} | Days: ${aprData.daysToExpiry.toFixed(1)} | Price: $${aprData.optionPriceUSD.toFixed(2)}`;
+    aprBadge.title = `${assetType || 'BTC'} ${optionType.toUpperCase()} ${strike} ${priceType.toUpperCase()} | Days: ${aprData.daysToExpiry.toFixed(1)}`;
   }
 
   // ========== Remove Tibired APR Badge ==========
@@ -527,43 +527,111 @@
   function findUnderlyingPrice() {
     // Tibired shows price like:
     // <span class="css-o60dzv">标的期货: <span class="deribit-icon-usdc"></span>67,069.90</span>
+    // Also: the live underlying price sits in the middle row of the option chain,
+    // e.g. <div class="css-ko4qlk">58,662</div>
 
-    // First try: find the specific price display element
-    const priceLabels = document.querySelectorAll('[class*="css-o60dzv"]');
+    // Map of asset prices (supports any asset, e.g. BTC/ETH/SOL/HYPE/...)
+    if (!window._aprAssetPrices) window._aprAssetPrices = {};
 
-    for (const el of priceLabels) {
-      const text = el.textContent?.trim();
+    // Detect the page's asset from the first option row's data-id (e.g. HYPE_USDC-...)
+    const firstRow = document.querySelector('[data-id*="_USDC-"]');
+    const dataId = firstRow?.getAttribute('data-id') || '';
+    // Use indexOf (more robust than regex - handles lowercase/digits/prefixes)
+    const usdcIdx = dataId.indexOf('_USDC-');
+    let pageAsset = usdcIdx > 0 ? dataId.substring(0, usdcIdx) : null;
+    if (firstRow && !pageAsset) {
+      log('[APR] Could not parse asset from data-id:', dataId);
+    }
 
-      // Check for "标的期货:" pattern
+    // Detect asset change to invalidate stale state (SPA navigation between assets)
+    if (window._aprLastAsset && window._aprLastAsset !== pageAsset) {
+      log('[APR] Asset changed:', window._aprLastAsset, '->', pageAsset, ', resetting underlying price');
+      underlyingPrice = null;
+    }
+    window._aprLastAsset = pageAsset;
+
+    // Always start fresh - never trust a stale module-level value across re-runs
+    let detectedPrice = null;
+
+    // Strategy 1: "标的期货" label element (known Tibired class)
+    const labelEls = document.querySelectorAll('[class*="css-o60dzv"]');
+    for (const el of labelEls) {
+      const text = el.textContent?.trim() || '';
       if (text.includes('标的期货')) {
-        // Extract the price number after the label
         const match = text.match(/标的期货.*?([\d,]+\.?\d+)/);
         if (match) {
           const price = parsePrice(match[1]);
-          log('[APR] Found price from 标的期货:', match[1], '-> parsed:', price);
-          // Determine if BTC or ETH based on magnitude
-          if (price && price > 10000 && price < 200000) {
-            btcPrice = price;
-            log('[APR] Set as BTC price:', btcPrice);
-          } else if (price && price > 500 && price < 10000) {
-            ethPrice = price;
-            log('[APR] Set as ETH price:', ethPrice);
+          if (price && price > 0) { detectedPrice = price; break; }
+        }
+      }
+    }
+
+    // Strategy 2: broad search for any element containing "标的期货"
+    if (!detectedPrice) {
+      const candidates = document.querySelectorAll('span, div, p, h6, li');
+      for (const el of candidates) {
+        const text = el.textContent || '';
+        if (text.length > 300) continue; // skip large containers
+        if (text.includes('标的期货')) {
+          const match = text.match(/标的期货.*?([\d,]+\.?\d+)/);
+          if (match) {
+            const price = parsePrice(match[1]);
+            if (price && price > 0) { detectedPrice = price; break; }
           }
         }
       }
     }
 
-    // Set underlyingPrice based on which options are on the page
-    const hasBTCOptions = document.querySelector('[data-id^="BTC_USDC-"]');
-    const hasETHOptions = document.querySelector('[data-id^="ETH_USDC-"]');
-
-    if (hasBTCOptions && btcPrice) {
-      underlyingPrice = btcPrice;
-    } else if (hasETHOptions && ethPrice) {
-      underlyingPrice = ethPrice;
+    // Strategy 3: English "Underlying" / "Index" / "Spot" label
+    if (!detectedPrice) {
+      const candidates = document.querySelectorAll('span, div, p, h6, li');
+      for (const el of candidates) {
+        const text = el.textContent || '';
+        if (text.length > 300) continue;
+        const m = text.match(/(underlying|index|spot)\s*[:：]?\s*([\d,]+\.?\d]+)/i);
+        if (m) {
+          const price = parsePrice(m[2]);
+          if (price && price > 0) { detectedPrice = price; break; }
+        }
+      }
     }
 
-    log('[APR] Final - BTC:', btcPrice, 'ETH:', ethPrice, 'Underlying:', underlyingPrice);
+    // Strategy 4: middle-row live price in the option chain
+    // Structure: <div class="css-cssveg"><div></div><div></div><div class="css-ko4qlk">58,662</div><div></div><div></div></div>
+    // The center cell holds the constantly-updating underlying price.
+    if (!detectedPrice) {
+      const midEls = document.querySelectorAll('.css-ko4qlk');
+      for (const el of midEls) {
+        const text = (el.textContent || '').trim();
+        const match = text.match(/^([\d,]+\.?\d+)$/);
+        if (match) {
+          const price = parsePrice(match[1]);
+          if (price && price > 0) { detectedPrice = price; break; }
+        }
+      }
+    }
+
+    if (detectedPrice && pageAsset) {
+      window._aprAssetPrices[pageAsset] = detectedPrice;
+      if (pageAsset === 'BTC') btcPrice = detectedPrice;
+      else if (pageAsset === 'ETH') ethPrice = detectedPrice;
+      underlyingPrice = detectedPrice;
+      log('[APR] Set', pageAsset, 'price:', detectedPrice);
+    } else if (pageAsset && window._aprAssetPrices[pageAsset]) {
+      // Use cached price for this asset if label not found this run
+      underlyingPrice = window._aprAssetPrices[pageAsset];
+      log('[APR] Using cached', pageAsset, 'price:', underlyingPrice);
+    } else if (pageAsset === 'BTC' && btcPrice) {
+      underlyingPrice = btcPrice;
+    } else if (pageAsset === 'ETH' && ethPrice) {
+      underlyingPrice = ethPrice;
+    } else {
+      // No price found - ensure null so isOTM returns false (no badge) instead of using stale value
+      underlyingPrice = null;
+      log('[APR] No underlying price found for', pageAsset, '- APR badges will be hidden');
+    }
+
+    log('[APR] Final - asset:', pageAsset, 'Underlying:', underlyingPrice);
   }
 
   // ========== Parse Price ==========
@@ -727,7 +795,7 @@
     const isHeaderClass = /header|Header|ag-header/i.test(row.className || '');
     // Also check if row contains header-like text only
     const text = row.textContent?.trim() || '';
-    const isOnlyHeaders = !/\d{4,6}/.test(text) && !/BTC_|ETH_/.test(text);
+    const isOnlyHeaders = !/\d{4,6}/.test(text) && !/[A-Z]+_USDC-/.test(text);
     return isHeaderTag || isHeaderRole || isHeaderClass;
   }
 
@@ -790,7 +858,7 @@
 
       // Product name detection (产品)
       if (cls.includes('product') || cls.includes('instrument') ||
-          /BTC_|ETH_/.test(cell.text)) {
+          /[A-Z]+_USDC-/.test(cell.text)) {
         productName = cell.text.trim();
         // Parse option name: BTC_USDC-24APR26-50000-P or BTC-5APR24-65000-C
         // Match strike and type at end: -50000-P or -65000-C
@@ -817,7 +885,7 @@
       }
       // Strike detection (行权价)
       if (cls.includes('strike') || txt.includes('行权') || txt.includes('strike')) {
-        if (value && value > 10000) strike = value;
+        if (value && value > 0) strike = value;
       }
       // Bid detection (买入价)
       else if (cls.includes('bid') || txt.includes('买入') || txt.includes('bid')) {
@@ -877,8 +945,8 @@
     if (!strike) {
       for (const cell of cellData) {
         const value = parsePrice(cell.text);
-        // Strike prices for BTC are typically 4-6 digits
-        if (value && value >= 10000 && value <= 200000) {
+        // Strike prices vary by asset (BTC ~10000-200000, ETH ~500-10000, SOL ~50-500, etc.)
+        if (value && value >= 1 && value <= 500000) {
           strike = value;
           break;
         }
